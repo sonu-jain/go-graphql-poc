@@ -2,18 +2,20 @@ package main
 
 import (
 	"fmt"
+	"go-graphql-poc/db"
+	"go-graphql-poc/graph"
+	"go-graphql-poc/middleware"
+	"log"
+	"net/http"
+	"os"
+	"time"
+
 	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/99designs/gqlgen/graphql/handler/extension"
 	"github.com/99designs/gqlgen/graphql/handler/lru"
 	"github.com/99designs/gqlgen/graphql/handler/transport"
 	"github.com/99designs/gqlgen/graphql/playground"
 	"github.com/vektah/gqlparser/v2/ast"
-	"go-graphql-poc/db"
-	"go-graphql-poc/graph"
-	"log"
-	"net/http"
-	"os"
-	"time"
 )
 
 const defaultPort = "8080"
@@ -27,6 +29,9 @@ func main() {
 	db.Init()
 
 	srv := handler.New(graph.NewExecutableSchema(graph.Config{Resolvers: &graph.Resolver{}}))
+
+	// Set custom error presenter for formatted error responses
+	srv.SetErrorPresenter(middleware.ErrorPresenter)
 
 	srv.AddTransport(transport.Options{})
 	srv.AddTransport(transport.GET{})
