@@ -1,0 +1,47 @@
+version: "3.9"
+
+services:
+  yugabytedb:
+    image: yugabytedb/yugabyte:2.20.7.2-b1
+    container_name: kyc-dep_yugabyte
+    command: >
+      bin/yugabyted start
+      --daemon=false
+      --ysql_enable_auth=true
+      --tserver_flags="ysql_max_connections=1000,ysql_log_statement=all"
+      --base_dir=/home/yugabyte/yb_data
+      --background=false
+    restart: unless-stopped
+    environment:
+      YSQL_DB: customer
+      YSQL_USER: root
+      YSQL_PASSWORD: Data@123
+      TZ: Asia/Manila
+    volumes:
+      - yugabyte_data:/home/yugabyte/yb_data
+      # optional preload data (if needed)
+      # - ./test/volume_test/preload_data:/files/preload_data
+    ports:
+      - "5433:5433"     # YSQL (PostgreSQL-compatible)
+      - "7001:7000"     # Master Admin UI
+      - "9000:9000"     # TServer Admin UI
+      - "9042:9042"     # YCQL (Cassandra)
+      - "12000:12000"   # master RPC
+      - "13000:13000"   # tserver RPC
+    deploy:
+      resources:
+        reservations:
+          cpus: '2.00'
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h localhost -p 5433 -U yugabyte"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  default:
+    name: kyc-dep-network
+    driver: bridge
+
+volumes:
+  yugabyte_data:
