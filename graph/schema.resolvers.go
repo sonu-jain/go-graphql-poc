@@ -6,33 +6,34 @@ package graph
 
 import (
 	"context"
+	"fmt"
 	"go-graphql-poc/db"
 	"go-graphql-poc/graph/model"
 	"go-graphql-poc/validator"
 	"strconv"
+	"strings"
+	"time"
 )
 
-// CreateCustomer is the resolver for the createCustomer field.
-func (r *mutationResolver) CreateCustomer(ctx context.Context, input model.CreateCustomerInput) (model.CustomerInterface, error) {
+// CreateIndividualCustomer is the resolver for the createIndividualCustomer field.
+func (r *mutationResolver) CreateIndividualCustomer(ctx context.Context, input model.CreateIndividualCustomerInput) (*model.IndividualCustomer, error) {
 	// Validate input
 	if err := validator.ValidateCustomerCreate(input.Name, input.Email); err != nil {
 		return nil, err
 	}
 
-	customerType := db.CustomerTypeIndividual // default
-	if input.Type != nil {
-		customerType = db.CustomerType(*input.Type)
-	}
-
 	customer := &db.Customer{
-		Name:  input.Name,
-		Email: input.Email,
-		Type:  customerType,
+		Name:   input.Name,
+		Email:  input.Email,
+		Type:   db.CustomerTypeIndividual,
+		Status: db.CustomerStatusActive,
 	}
 
-	// Set company name for business customers
-	if customerType == db.CustomerTypeBusiness && input.CompanyName != nil {
-		customer.CompanyName = input.CompanyName
+	// Set personal info if provided
+	if input.PersonalInfo != nil {
+		customer.Phone = input.PersonalInfo.Phone
+		customer.Address = input.PersonalInfo.Address
+		customer.DateOfBirth = input.PersonalInfo.DateOfBirth
 	}
 
 	result := db.DB.Create(customer)
@@ -40,12 +41,107 @@ func (r *mutationResolver) CreateCustomer(ctx context.Context, input model.Creat
 		return nil, result.Error
 	}
 
-	// Return the appropriate customer type based on interface
-	return convertToCustomerInterface(customer), nil
+	return convertToIndividualCustomer(customer), nil
+}
+
+// CreateBusinessCustomer is the resolver for the createBusinessCustomer field.
+func (r *mutationResolver) CreateBusinessCustomer(ctx context.Context, input model.CreateBusinessCustomerInput) (*model.BusinessCustomer, error) {
+	// Validate input
+	if err := validator.ValidateCustomerCreate(input.Name, input.Email); err != nil {
+		return nil, err
+	}
+
+	customer := &db.Customer{
+		Name:        input.Name,
+		Email:       input.Email,
+		Type:        db.CustomerTypeBusiness,
+		Status:      db.CustomerStatusActive,
+		CompanyName: &input.CompanyName,
+	}
+
+	// Set business info if provided
+	if input.BusinessInfo != nil {
+		customer.TaxID = input.BusinessInfo.TaxID
+		customer.Industry = input.BusinessInfo.Industry
+		if input.BusinessInfo.EmployeeCount != nil {
+			employeeCount := int(*input.BusinessInfo.EmployeeCount)
+			customer.EmployeeCount = &employeeCount
+		}
+		customer.Website = input.BusinessInfo.Website
+	}
+
+	result := db.DB.Create(customer)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+
+	return convertToBusinessCustomer(customer), nil
+}
+
+// CreatePremiumCustomer is the resolver for the createPremiumCustomer field.
+func (r *mutationResolver) CreatePremiumCustomer(ctx context.Context, input model.CreatePremiumCustomerInput) (*model.PremiumCustomer, error) {
+	// Validate input
+	if err := validator.ValidateCustomerCreate(input.Name, input.Email); err != nil {
+		return nil, err
+	}
+
+	customer := &db.Customer{
+		Name:        input.Name,
+		Email:       input.Email,
+		Type:        db.CustomerTypePremium,
+		Status:      db.CustomerStatusActive,
+		PremiumTier: &input.PremiumTier,
+	}
+
+	result := db.DB.Create(customer)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+
+	return convertToPremiumCustomer(customer), nil
+}
+
+// CreateCustomerWithErrorHandling is the resolver for the createCustomerWithErrorHandling field.
+func (r *mutationResolver) CreateCustomerWithErrorHandling(ctx context.Context, input model.CreateIndividualCustomerInput) (model.CustomerOperationResult, error) {
+	// Validate input
+	if err := validator.ValidateCustomerCreate(input.Name, input.Email); err != nil {
+		field := "input"
+		return &model.OperationError{
+			Code:    "VALIDATION_ERROR",
+			Message: err.Error(),
+			Field:   &field,
+		}, nil
+	}
+
+	customer := &db.Customer{
+		Name:   input.Name,
+		Email:  input.Email,
+		Type:   db.CustomerTypeIndividual,
+		Status: db.CustomerStatusActive,
+	}
+
+	// Set personal info if provided
+	if input.PersonalInfo != nil {
+		customer.Phone = input.PersonalInfo.Phone
+		customer.Address = input.PersonalInfo.Address
+		customer.DateOfBirth = input.PersonalInfo.DateOfBirth
+	}
+
+	result := db.DB.Create(customer)
+	if result.Error != nil {
+		field := "database"
+		return &model.OperationError{
+			Code:    "DATABASE_ERROR",
+			Message: result.Error.Error(),
+			Field:   &field,
+		}, nil
+	}
+
+	return convertToIndividualCustomer(customer), nil
 }
 
 // UpdateCustomer is the resolver for the updateCustomer field.
-func (r *mutationResolver) UpdateCustomer(ctx context.Context, id string, name *string, email *string, companyName *string) (model.CustomerInterface, error) {
+func (r *mutationResolver) UpdateCustomer(ctx context.Context, id string, input model.UpdateCustomerInput) (model.CustomerInterface, error) {
 	// Validate input
 	if err := validator.ValidateID(id); err != nil {
 		return nil, err
@@ -58,14 +154,35 @@ func (r *mutationResolver) UpdateCustomer(ctx context.Context, id string, name *
 	}
 
 	// Update fields if provided
-	if name != nil {
-		customer.Name = *name
+	if input.Name != nil {
+		customer.Name = *input.Name
 	}
-	if email != nil {
-		customer.Email = *email
+	if input.Email != nil {
+		customer.Email = *input.Email
 	}
-	if companyName != nil {
-		customer.CompanyName = companyName
+	if input.CompanyName != nil {
+		customer.CompanyName = input.CompanyName
+	}
+	if input.PremiumTier != nil {
+		customer.PremiumTier = input.PremiumTier
+	}
+
+	// Update personal info if provided
+	if input.PersonalInfo != nil {
+		customer.Phone = input.PersonalInfo.Phone
+		customer.Address = input.PersonalInfo.Address
+		customer.DateOfBirth = input.PersonalInfo.DateOfBirth
+	}
+
+	// Update business info if provided
+	if input.BusinessInfo != nil {
+		customer.TaxID = input.BusinessInfo.TaxID
+		customer.Industry = input.BusinessInfo.Industry
+		if input.BusinessInfo.EmployeeCount != nil {
+			employeeCount := int(*input.BusinessInfo.EmployeeCount)
+			customer.EmployeeCount = &employeeCount
+		}
+		customer.Website = input.BusinessInfo.Website
 	}
 
 	if err := db.DB.Save(&customer).Error; err != nil {
@@ -149,26 +266,213 @@ func (r *queryResolver) CustomersByType(ctx context.Context, customerType model.
 	return customerInterfaces, nil
 }
 
-// Helper function to convert db.Customer to appropriate GraphQL interface type
+// SearchCustomers is the resolver for the searchCustomers field.
+func (r *queryResolver) SearchCustomers(ctx context.Context, query string) ([]model.CustomerResult, error) {
+	var customers []*db.Customer
+	searchQuery := "%" + strings.ToLower(query) + "%"
+
+	result := db.DB.Where(
+		"LOWER(name) LIKE ? OR LOWER(email) LIKE ? OR LOWER(company_name) LIKE ? OR LOWER(industry) LIKE ?",
+		searchQuery, searchQuery, searchQuery, searchQuery,
+	).Find(&customers)
+
+	if result.Error != nil {
+		return nil, result.Error
+	}
+
+	var customerResults []model.CustomerResult
+	for _, customer := range customers {
+		customerInterface := convertToCustomerInterface(customer)
+		// Convert interface to union type
+		switch customerInterface.(type) {
+		case *model.IndividualCustomer:
+			customerResults = append(customerResults, customerInterface.(*model.IndividualCustomer))
+		case *model.BusinessCustomer:
+			customerResults = append(customerResults, customerInterface.(*model.BusinessCustomer))
+		case *model.PremiumCustomer:
+			customerResults = append(customerResults, customerInterface.(*model.PremiumCustomer))
+		}
+	}
+
+	return customerResults, nil
+}
+
+// GetCustomerWithErrorHandling is the resolver for the getCustomerWithErrorHandling field.
+func (r *queryResolver) GetCustomerWithErrorHandling(ctx context.Context, id string) (model.CustomerOperationResult, error) {
+	// Validate input
+	if err := validator.ValidateID(id); err != nil {
+		field := "id"
+		return &model.OperationError{
+			Code:    "VALIDATION_ERROR",
+			Message: err.Error(),
+			Field:   &field,
+		}, nil
+	}
+
+	var customer db.Customer
+	cid, _ := strconv.Atoi(id)
+	result := db.DB.First(&customer, cid)
+	if result.Error != nil {
+		field := "id"
+		return &model.OperationError{
+			Code:    "NOT_FOUND",
+			Message: fmt.Sprintf("Customer with ID %s not found", id),
+			Field:   &field,
+		}, nil
+	}
+
+	// Convert interface to union type
+	customerInterface := convertToCustomerInterface(&customer)
+	switch customerInterface.(type) {
+	case *model.IndividualCustomer:
+		return customerInterface.(*model.IndividualCustomer), nil
+	case *model.BusinessCustomer:
+		return customerInterface.(*model.BusinessCustomer), nil
+	case *model.PremiumCustomer:
+		return customerInterface.(*model.PremiumCustomer), nil
+	default:
+		return nil, fmt.Errorf("unknown customer type")
+	}
+}
+
+// CustomersByStatus is the resolver for the customersByStatus field.
+func (r *queryResolver) CustomersByStatus(ctx context.Context, status model.CustomerStatus, page *int32, offset *int32) ([]model.CustomerInterface, error) {
+	// Validate pagination parameters
+	if err := validator.ValidatePagination(page, offset); err != nil {
+		return nil, err
+	}
+
+	var customers []*db.Customer
+	dbStatus := db.CustomerStatus(status)
+	result := db.DB.Where("status = ?", dbStatus).Limit(int(*page)).Offset(int(*offset)).Find(&customers)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+
+	var customerInterfaces []model.CustomerInterface
+	for _, customer := range customers {
+		customerInterfaces = append(customerInterfaces, convertToCustomerInterface(customer))
+	}
+
+	return customerInterfaces, nil
+}
+
+// PremiumCustomersByTier is the resolver for the premiumCustomersByTier field.
+func (r *queryResolver) PremiumCustomersByTier(ctx context.Context, tier string, page *int32, offset *int32) ([]*model.PremiumCustomer, error) {
+	// Validate pagination parameters
+	if err := validator.ValidatePagination(page, offset); err != nil {
+		return nil, err
+	}
+
+	var customers []*db.Customer
+	result := db.DB.Where("type = ? AND premium_tier = ?", db.CustomerTypePremium, tier).
+		Limit(int(*page)).Offset(int(*offset)).Find(&customers)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+
+	var premiumCustomers []*model.PremiumCustomer
+	for _, customer := range customers {
+		premiumCustomers = append(premiumCustomers, convertToPremiumCustomer(customer))
+	}
+
+	return premiumCustomers, nil
+}
+
+// Helper functions to convert db.Customer to appropriate GraphQL types
 func convertToCustomerInterface(customer *db.Customer) model.CustomerInterface {
 	switch customer.Type {
 	case db.CustomerTypeBusiness:
-		companyName := ""
-		if customer.CompanyName != nil {
-			companyName = *customer.CompanyName
-		}
-		return &model.BusinessCustomer{
-			ID:          strconv.FormatUint(uint64(customer.ID), 10),
-			Name:        customer.Name,
-			Email:       customer.Email,
-			CompanyName: companyName,
-		}
+		return convertToBusinessCustomer(customer)
+	case db.CustomerTypePremium:
+		return convertToPremiumCustomer(customer)
 	default: // Individual
-		return &model.IndividualCustomer{
-			ID:    strconv.FormatUint(uint64(customer.ID), 10),
-			Name:  customer.Name,
-			Email: customer.Email,
+		return convertToIndividualCustomer(customer)
+	}
+}
+
+func convertToIndividualCustomer(customer *db.Customer) *model.IndividualCustomer {
+	var personalInfo *model.PersonalInfo
+	if customer.Phone != nil || customer.Address != nil || customer.DateOfBirth != nil {
+		personalInfo = &model.PersonalInfo{
+			Phone:       customer.Phone,
+			Address:     customer.Address,
+			DateOfBirth: customer.DateOfBirth,
 		}
+	}
+
+	return &model.IndividualCustomer{
+		ID:           strconv.FormatUint(uint64(customer.ID), 10),
+		Name:         customer.Name,
+		Email:        customer.Email,
+		CreatedAt:    customer.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:    customer.UpdatedAt.Format(time.RFC3339),
+		PersonalInfo: personalInfo,
+	}
+}
+
+func convertToBusinessCustomer(customer *db.Customer) *model.BusinessCustomer {
+	var businessInfo *model.BusinessInfo
+	if customer.TaxID != nil || customer.Industry != nil || customer.EmployeeCount != nil || customer.Website != nil {
+		var employeeCount *int32
+		if customer.EmployeeCount != nil {
+			empCount := int32(*customer.EmployeeCount)
+			employeeCount = &empCount
+		}
+		businessInfo = &model.BusinessInfo{
+			TaxID:         customer.TaxID,
+			Industry:      customer.Industry,
+			EmployeeCount: employeeCount,
+			Website:       customer.Website,
+		}
+	}
+
+	companyName := ""
+	if customer.CompanyName != nil {
+		companyName = *customer.CompanyName
+	}
+
+	return &model.BusinessCustomer{
+		ID:           strconv.FormatUint(uint64(customer.ID), 10),
+		Name:         customer.Name,
+		Email:        customer.Email,
+		CreatedAt:    customer.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:    customer.UpdatedAt.Format(time.RFC3339),
+		CompanyName:  companyName,
+		BusinessInfo: businessInfo,
+	}
+}
+
+func convertToPremiumCustomer(customer *db.Customer) *model.PremiumCustomer {
+	premiumTier := ""
+	if customer.PremiumTier != nil {
+		premiumTier = *customer.PremiumTier
+	}
+
+	benefits := getPremiumBenefits(premiumTier)
+
+	return &model.PremiumCustomer{
+		ID:          strconv.FormatUint(uint64(customer.ID), 10),
+		Name:        customer.Name,
+		Email:       customer.Email,
+		CreatedAt:   customer.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:   customer.UpdatedAt.Format(time.RFC3339),
+		PremiumTier: premiumTier,
+		Benefits:    benefits,
+	}
+}
+
+// Helper function to get premium benefits based on tier
+func getPremiumBenefits(tier string) []string {
+	switch strings.ToUpper(tier) {
+	case "GOLD":
+		return []string{"Priority Support", "Advanced Analytics", "Custom Integrations", "24/7 Phone Support"}
+	case "PLATINUM":
+		return []string{"Priority Support", "Advanced Analytics", "Custom Integrations", "24/7 Phone Support", "Dedicated Account Manager", "White-label Options"}
+	case "DIAMOND":
+		return []string{"Priority Support", "Advanced Analytics", "Custom Integrations", "24/7 Phone Support", "Dedicated Account Manager", "White-label Options", "API Rate Limits", "Custom Development"}
+	default:
+		return []string{"Basic Support", "Standard Features"}
 	}
 }
 

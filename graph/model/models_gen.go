@@ -14,42 +14,205 @@ type CustomerInterface interface {
 	GetID() string
 	GetName() string
 	GetEmail() string
+	GetCreatedAt() string
+	GetUpdatedAt() string
+}
+
+type CustomerOperationResult interface {
+	IsCustomerOperationResult()
+}
+
+type CustomerResult interface {
+	IsCustomerResult()
 }
 
 type BusinessCustomer struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Email       string `json:"email"`
-	CompanyName string `json:"companyName"`
+	ID           string        `json:"id"`
+	Name         string        `json:"name"`
+	Email        string        `json:"email"`
+	CreatedAt    string        `json:"createdAt"`
+	UpdatedAt    string        `json:"updatedAt"`
+	CompanyName  string        `json:"companyName"`
+	BusinessInfo *BusinessInfo `json:"businessInfo,omitempty"`
 }
 
-func (BusinessCustomer) IsCustomerInterface()  {}
-func (this BusinessCustomer) GetID() string    { return this.ID }
-func (this BusinessCustomer) GetName() string  { return this.Name }
-func (this BusinessCustomer) GetEmail() string { return this.Email }
+func (BusinessCustomer) IsCustomerInterface()      {}
+func (this BusinessCustomer) GetID() string        { return this.ID }
+func (this BusinessCustomer) GetName() string      { return this.Name }
+func (this BusinessCustomer) GetEmail() string     { return this.Email }
+func (this BusinessCustomer) GetCreatedAt() string { return this.CreatedAt }
+func (this BusinessCustomer) GetUpdatedAt() string { return this.UpdatedAt }
 
-type CreateCustomerInput struct {
-	Name        string        `json:"name"`
-	Email       string        `json:"email"`
-	Type        *CustomerType `json:"type,omitempty"`
-	CompanyName *string       `json:"companyName,omitempty"`
+func (BusinessCustomer) IsCustomerResult() {}
+
+func (BusinessCustomer) IsCustomerOperationResult() {}
+
+type BusinessInfo struct {
+	TaxID         *string `json:"taxId,omitempty"`
+	Industry      *string `json:"industry,omitempty"`
+	EmployeeCount *int32  `json:"employeeCount,omitempty"`
+	Website       *string `json:"website,omitempty"`
+}
+
+type BusinessInfoInput struct {
+	TaxID         *string `json:"taxId,omitempty"`
+	Industry      *string `json:"industry,omitempty"`
+	EmployeeCount *int32  `json:"employeeCount,omitempty"`
+	Website       *string `json:"website,omitempty"`
+}
+
+type CreateBusinessCustomerInput struct {
+	Name         string             `json:"name"`
+	Email        string             `json:"email"`
+	CompanyName  string             `json:"companyName"`
+	BusinessInfo *BusinessInfoInput `json:"businessInfo,omitempty"`
+}
+
+type CreateIndividualCustomerInput struct {
+	Name         string             `json:"name"`
+	Email        string             `json:"email"`
+	PersonalInfo *PersonalInfoInput `json:"personalInfo,omitempty"`
+}
+
+type CreatePremiumCustomerInput struct {
+	Name        string `json:"name"`
+	Email       string `json:"email"`
+	PremiumTier string `json:"premiumTier"`
 }
 
 type IndividualCustomer struct {
-	ID    string `json:"id"`
-	Name  string `json:"name"`
-	Email string `json:"email"`
+	ID           string        `json:"id"`
+	Name         string        `json:"name"`
+	Email        string        `json:"email"`
+	CreatedAt    string        `json:"createdAt"`
+	UpdatedAt    string        `json:"updatedAt"`
+	PersonalInfo *PersonalInfo `json:"personalInfo,omitempty"`
 }
 
-func (IndividualCustomer) IsCustomerInterface()  {}
-func (this IndividualCustomer) GetID() string    { return this.ID }
-func (this IndividualCustomer) GetName() string  { return this.Name }
-func (this IndividualCustomer) GetEmail() string { return this.Email }
+func (IndividualCustomer) IsCustomerInterface()      {}
+func (this IndividualCustomer) GetID() string        { return this.ID }
+func (this IndividualCustomer) GetName() string      { return this.Name }
+func (this IndividualCustomer) GetEmail() string     { return this.Email }
+func (this IndividualCustomer) GetCreatedAt() string { return this.CreatedAt }
+func (this IndividualCustomer) GetUpdatedAt() string { return this.UpdatedAt }
+
+func (IndividualCustomer) IsCustomerResult() {}
+
+func (IndividualCustomer) IsCustomerOperationResult() {}
 
 type Mutation struct {
 }
 
+type OperationError struct {
+	Code    string  `json:"code"`
+	Message string  `json:"message"`
+	Field   *string `json:"field,omitempty"`
+}
+
+func (OperationError) IsCustomerOperationResult() {}
+
+type PersonalInfo struct {
+	Phone       *string `json:"phone,omitempty"`
+	Address     *string `json:"address,omitempty"`
+	DateOfBirth *string `json:"dateOfBirth,omitempty"`
+}
+
+type PersonalInfoInput struct {
+	Phone       *string `json:"phone,omitempty"`
+	Address     *string `json:"address,omitempty"`
+	DateOfBirth *string `json:"dateOfBirth,omitempty"`
+}
+
+type PremiumCustomer struct {
+	ID          string   `json:"id"`
+	Name        string   `json:"name"`
+	Email       string   `json:"email"`
+	CreatedAt   string   `json:"createdAt"`
+	UpdatedAt   string   `json:"updatedAt"`
+	PremiumTier string   `json:"premiumTier"`
+	Benefits    []string `json:"benefits"`
+}
+
+func (PremiumCustomer) IsCustomerInterface()      {}
+func (this PremiumCustomer) GetID() string        { return this.ID }
+func (this PremiumCustomer) GetName() string      { return this.Name }
+func (this PremiumCustomer) GetEmail() string     { return this.Email }
+func (this PremiumCustomer) GetCreatedAt() string { return this.CreatedAt }
+func (this PremiumCustomer) GetUpdatedAt() string { return this.UpdatedAt }
+
+func (PremiumCustomer) IsCustomerResult() {}
+
+func (PremiumCustomer) IsCustomerOperationResult() {}
+
 type Query struct {
+}
+
+type UpdateCustomerInput struct {
+	Name         *string            `json:"name,omitempty"`
+	Email        *string            `json:"email,omitempty"`
+	CompanyName  *string            `json:"companyName,omitempty"`
+	PremiumTier  *string            `json:"premiumTier,omitempty"`
+	PersonalInfo *PersonalInfoInput `json:"personalInfo,omitempty"`
+	BusinessInfo *BusinessInfoInput `json:"businessInfo,omitempty"`
+}
+
+type CustomerStatus string
+
+const (
+	CustomerStatusActive    CustomerStatus = "ACTIVE"
+	CustomerStatusInactive  CustomerStatus = "INACTIVE"
+	CustomerStatusSuspended CustomerStatus = "SUSPENDED"
+	CustomerStatusPending   CustomerStatus = "PENDING"
+)
+
+var AllCustomerStatus = []CustomerStatus{
+	CustomerStatusActive,
+	CustomerStatusInactive,
+	CustomerStatusSuspended,
+	CustomerStatusPending,
+}
+
+func (e CustomerStatus) IsValid() bool {
+	switch e {
+	case CustomerStatusActive, CustomerStatusInactive, CustomerStatusSuspended, CustomerStatusPending:
+		return true
+	}
+	return false
+}
+
+func (e CustomerStatus) String() string {
+	return string(e)
+}
+
+func (e *CustomerStatus) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = CustomerStatus(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid CustomerStatus", str)
+	}
+	return nil
+}
+
+func (e CustomerStatus) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *CustomerStatus) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e CustomerStatus) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
 }
 
 type CustomerType string
@@ -57,16 +220,18 @@ type CustomerType string
 const (
 	CustomerTypeIndividual CustomerType = "INDIVIDUAL"
 	CustomerTypeBusiness   CustomerType = "BUSINESS"
+	CustomerTypePremium    CustomerType = "PREMIUM"
 )
 
 var AllCustomerType = []CustomerType{
 	CustomerTypeIndividual,
 	CustomerTypeBusiness,
+	CustomerTypePremium,
 }
 
 func (e CustomerType) IsValid() bool {
 	switch e {
-	case CustomerTypeIndividual, CustomerTypeBusiness:
+	case CustomerTypeIndividual, CustomerTypeBusiness, CustomerTypePremium:
 		return true
 	}
 	return false

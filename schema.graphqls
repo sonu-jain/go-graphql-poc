@@ -7,6 +7,8 @@ interface CustomerInterface {
     id: ID!
     name: String!
     email: String!
+    createdAt: String!
+    updatedAt: String!
 }
 
 # Individual customer type
@@ -14,6 +16,9 @@ type IndividualCustomer implements CustomerInterface {
     id: ID!
     name: String!
     email: String!
+    createdAt: String!
+    updatedAt: String!
+    personalInfo: PersonalInfo
 }
 
 # Business customer type
@@ -21,31 +26,133 @@ type BusinessCustomer implements CustomerInterface {
     id: ID!
     name: String!
     email: String!
+    createdAt: String!
+    updatedAt: String!
     companyName: String!
+    businessInfo: BusinessInfo
+}
+
+# Premium customer type
+type PremiumCustomer implements CustomerInterface {
+    id: ID!
+    name: String!
+    email: String!
+    createdAt: String!
+    updatedAt: String!
+    premiumTier: String!
+    benefits: [String!]!
+}
+
+# Union type for customer search results
+union CustomerResult = IndividualCustomer | BusinessCustomer | PremiumCustomer
+
+# Union type for customer operations
+union CustomerOperationResult = IndividualCustomer | BusinessCustomer | PremiumCustomer | OperationError
+
+# Error type for operations
+type OperationError {
+    code: String!
+    message: String!
+    field: String
+}
+
+# Personal information for individual customers
+type PersonalInfo {
+    phone: String
+    address: String
+    dateOfBirth: String
+}
+
+# Business information for business customers
+type BusinessInfo {
+    taxId: String
+    industry: String
+    employeeCount: Int
+    website: String
 }
 
 # Customer type enum
 enum CustomerType {
     INDIVIDUAL
     BUSINESS
+    PREMIUM
+}
+
+# Customer status enum
+enum CustomerStatus {
+    ACTIVE
+    INACTIVE
+    SUSPENDED
+    PENDING
 }
 
 # Input types for creating customers
-input CreateCustomerInput {
+input CreateIndividualCustomerInput {
     name: String!
     email: String!
-    type: CustomerType = INDIVIDUAL
+    personalInfo: PersonalInfoInput
+}
+
+input CreateBusinessCustomerInput {
+    name: String!
+    email: String!
+    companyName: String!
+    businessInfo: BusinessInfoInput
+}
+
+input CreatePremiumCustomerInput {
+    name: String!
+    email: String!
+    premiumTier: String!
+}
+
+input PersonalInfoInput {
+    phone: String
+    address: String
+    dateOfBirth: String
+}
+
+input BusinessInfoInput {
+    taxId: String
+    industry: String
+    employeeCount: Int
+    website: String
+}
+
+input UpdateCustomerInput {
+    name: String
+    email: String
     companyName: String
+    premiumTier: String
+    personalInfo: PersonalInfoInput
+    businessInfo: BusinessInfoInput
 }
 
 type Query {
+    # Interface-based queries
     customers(page: Int = 2, offset: Int = 0): [CustomerInterface!]!
     customer(id: ID!): CustomerInterface
     customersByType(type: CustomerType!, page: Int = 2, offset: Int = 0): [CustomerInterface!]!
+    
+    # Union-based queries
+    searchCustomers(query: String!): [CustomerResult!]!
+    getCustomerWithErrorHandling(id: ID!): CustomerOperationResult!
+    
+    # Advanced queries
+    customersByStatus(status: CustomerStatus!, page: Int = 2, offset: Int = 0): [CustomerInterface!]!
+    premiumCustomersByTier(tier: String!, page: Int = 2, offset: Int = 0): [PremiumCustomer!]!
 }
 
 type Mutation {
-    createCustomer(input: CreateCustomerInput!): CustomerInterface!
-    updateCustomer(id: ID!, name: String, email: String, companyName: String): CustomerInterface!
+    # Interface-based mutations
+    updateCustomer(id: ID!, input: UpdateCustomerInput!): CustomerInterface!
     deleteCustomer(id: ID!): Boolean!
+    
+    # Union-based mutations
+    createCustomerWithErrorHandling(input: CreateIndividualCustomerInput!): CustomerOperationResult!
+    
+    # Type-specific mutations
+    createIndividualCustomer(input: CreateIndividualCustomerInput!): IndividualCustomer!
+    createBusinessCustomer(input: CreateBusinessCustomerInput!): BusinessCustomer!
+    createPremiumCustomer(input: CreatePremiumCustomerInput!): PremiumCustomer!
 }
