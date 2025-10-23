@@ -46,32 +46,41 @@ type DirectiveRoot struct {
 }
 
 type ComplexityRoot struct {
-	Customer struct {
+	BusinessCustomer struct {
+		CompanyName func(childComplexity int) int
+		Email       func(childComplexity int) int
+		ID          func(childComplexity int) int
+		Name        func(childComplexity int) int
+	}
+
+	IndividualCustomer struct {
 		Email func(childComplexity int) int
 		ID    func(childComplexity int) int
 		Name  func(childComplexity int) int
 	}
 
 	Mutation struct {
-		CreateCustomer func(childComplexity int, name string, email string) int
+		CreateCustomer func(childComplexity int, input model.CreateCustomerInput) int
 		DeleteCustomer func(childComplexity int, id string) int
-		UpdateCustomer func(childComplexity int, id string, name *string, email *string) int
+		UpdateCustomer func(childComplexity int, id string, name *string, email *string, companyName *string) int
 	}
 
 	Query struct {
-		Customer  func(childComplexity int, id string) int
-		Customers func(childComplexity int, page *int32, offset *int32) int
+		Customer        func(childComplexity int, id string) int
+		Customers       func(childComplexity int, page *int32, offset *int32) int
+		CustomersByType func(childComplexity int, typeArg model.CustomerType, page *int32, offset *int32) int
 	}
 }
 
 type MutationResolver interface {
-	CreateCustomer(ctx context.Context, name string, email string) (*model.Customer, error)
-	UpdateCustomer(ctx context.Context, id string, name *string, email *string) (*model.Customer, error)
+	CreateCustomer(ctx context.Context, input model.CreateCustomerInput) (model.CustomerInterface, error)
+	UpdateCustomer(ctx context.Context, id string, name *string, email *string, companyName *string) (model.CustomerInterface, error)
 	DeleteCustomer(ctx context.Context, id string) (bool, error)
 }
 type QueryResolver interface {
-	Customers(ctx context.Context, page *int32, offset *int32) ([]*model.Customer, error)
-	Customer(ctx context.Context, id string) (*model.Customer, error)
+	Customers(ctx context.Context, page *int32, offset *int32) ([]model.CustomerInterface, error)
+	Customer(ctx context.Context, id string) (model.CustomerInterface, error)
+	CustomersByType(ctx context.Context, typeArg model.CustomerType, page *int32, offset *int32) ([]model.CustomerInterface, error)
 }
 
 type executableSchema struct {
@@ -93,24 +102,49 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 	_ = ec
 	switch typeName + "." + field {
 
-	case "Customer.email":
-		if e.complexity.Customer.Email == nil {
+	case "BusinessCustomer.companyName":
+		if e.complexity.BusinessCustomer.CompanyName == nil {
 			break
 		}
 
-		return e.complexity.Customer.Email(childComplexity), true
-	case "Customer.id":
-		if e.complexity.Customer.ID == nil {
+		return e.complexity.BusinessCustomer.CompanyName(childComplexity), true
+	case "BusinessCustomer.email":
+		if e.complexity.BusinessCustomer.Email == nil {
 			break
 		}
 
-		return e.complexity.Customer.ID(childComplexity), true
-	case "Customer.name":
-		if e.complexity.Customer.Name == nil {
+		return e.complexity.BusinessCustomer.Email(childComplexity), true
+	case "BusinessCustomer.id":
+		if e.complexity.BusinessCustomer.ID == nil {
 			break
 		}
 
-		return e.complexity.Customer.Name(childComplexity), true
+		return e.complexity.BusinessCustomer.ID(childComplexity), true
+	case "BusinessCustomer.name":
+		if e.complexity.BusinessCustomer.Name == nil {
+			break
+		}
+
+		return e.complexity.BusinessCustomer.Name(childComplexity), true
+
+	case "IndividualCustomer.email":
+		if e.complexity.IndividualCustomer.Email == nil {
+			break
+		}
+
+		return e.complexity.IndividualCustomer.Email(childComplexity), true
+	case "IndividualCustomer.id":
+		if e.complexity.IndividualCustomer.ID == nil {
+			break
+		}
+
+		return e.complexity.IndividualCustomer.ID(childComplexity), true
+	case "IndividualCustomer.name":
+		if e.complexity.IndividualCustomer.Name == nil {
+			break
+		}
+
+		return e.complexity.IndividualCustomer.Name(childComplexity), true
 
 	case "Mutation.createCustomer":
 		if e.complexity.Mutation.CreateCustomer == nil {
@@ -122,7 +156,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.complexity.Mutation.CreateCustomer(childComplexity, args["name"].(string), args["email"].(string)), true
+		return e.complexity.Mutation.CreateCustomer(childComplexity, args["input"].(model.CreateCustomerInput)), true
 	case "Mutation.deleteCustomer":
 		if e.complexity.Mutation.DeleteCustomer == nil {
 			break
@@ -144,7 +178,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.complexity.Mutation.UpdateCustomer(childComplexity, args["id"].(string), args["name"].(*string), args["email"].(*string)), true
+		return e.complexity.Mutation.UpdateCustomer(childComplexity, args["id"].(string), args["name"].(*string), args["email"].(*string), args["companyName"].(*string)), true
 
 	case "Query.customer":
 		if e.complexity.Query.Customer == nil {
@@ -168,6 +202,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.Query.Customers(childComplexity, args["page"].(*int32), args["offset"].(*int32)), true
+	case "Query.customersByType":
+		if e.complexity.Query.CustomersByType == nil {
+			break
+		}
+
+		args, err := ec.field_Query_customersByType_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.CustomersByType(childComplexity, args["type"].(model.CustomerType), args["page"].(*int32), args["offset"].(*int32)), true
 
 	}
 	return 0, false
@@ -176,7 +221,9 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 	opCtx := graphql.GetOperationContext(ctx)
 	ec := executionContext{opCtx, e, 0, 0, make(chan graphql.DeferredResult)}
-	inputUnmarshalMap := graphql.BuildUnmarshalerMap()
+	inputUnmarshalMap := graphql.BuildUnmarshalerMap(
+		ec.unmarshalInputCreateCustomerInput,
+	)
 	first := true
 
 	switch opCtx.Operation.Operation {
@@ -277,22 +324,53 @@ var sources = []*ast.Source{
 #
 # https://gqlgen.com/getting-started/
 
-type Customer {
-     id: ID!
-     name: String!
-     email: String!
- }
+# Base interface for all customer types
+interface CustomerInterface {
+    id: ID!
+    name: String!
+    email: String!
+}
 
- type Query {
-     customers(page:Int = 2, offset:Int = 0): [Customer!]!
-     customer(id: ID!): Customer
- }
+# Individual customer type
+type IndividualCustomer implements CustomerInterface {
+    id: ID!
+    name: String!
+    email: String!
+}
 
- type Mutation {
-     createCustomer(name: String!, email: String!): Customer!
-     updateCustomer(id: ID!, name: String, email: String): Customer!
-     deleteCustomer(id: ID!): Boolean!
- }`, BuiltIn: false},
+# Business customer type
+type BusinessCustomer implements CustomerInterface {
+    id: ID!
+    name: String!
+    email: String!
+    companyName: String!
+}
+
+# Customer type enum
+enum CustomerType {
+    INDIVIDUAL
+    BUSINESS
+}
+
+# Input types for creating customers
+input CreateCustomerInput {
+    name: String!
+    email: String!
+    type: CustomerType = INDIVIDUAL
+    companyName: String
+}
+
+type Query {
+    customers(page: Int = 2, offset: Int = 0): [CustomerInterface!]!
+    customer(id: ID!): CustomerInterface
+    customersByType(type: CustomerType!, page: Int = 2, offset: Int = 0): [CustomerInterface!]!
+}
+
+type Mutation {
+    createCustomer(input: CreateCustomerInput!): CustomerInterface!
+    updateCustomer(id: ID!, name: String, email: String, companyName: String): CustomerInterface!
+    deleteCustomer(id: ID!): Boolean!
+}`, BuiltIn: false},
 }
 var parsedSchema = gqlparser.MustLoadSchema(sources...)
 
@@ -303,16 +381,11 @@ var parsedSchema = gqlparser.MustLoadSchema(sources...)
 func (ec *executionContext) field_Mutation_createCustomer_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
-	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "name", ec.unmarshalNString2string)
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input", ec.unmarshalNCreateCustomerInput2goᚑgraphqlᚑpocᚋgraphᚋmodelᚐCreateCustomerInput)
 	if err != nil {
 		return nil, err
 	}
-	args["name"] = arg0
-	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "email", ec.unmarshalNString2string)
-	if err != nil {
-		return nil, err
-	}
-	args["email"] = arg1
+	args["input"] = arg0
 	return args, nil
 }
 
@@ -345,6 +418,11 @@ func (ec *executionContext) field_Mutation_updateCustomer_args(ctx context.Conte
 		return nil, err
 	}
 	args["email"] = arg2
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "companyName", ec.unmarshalOString2ᚖstring)
+	if err != nil {
+		return nil, err
+	}
+	args["companyName"] = arg3
 	return args, nil
 }
 
@@ -367,6 +445,27 @@ func (ec *executionContext) field_Query_customer_args(ctx context.Context, rawAr
 		return nil, err
 	}
 	args["id"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_customersByType_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "type", ec.unmarshalNCustomerType2goᚑgraphqlᚑpocᚋgraphᚋmodelᚐCustomerType)
+	if err != nil {
+		return nil, err
+	}
+	args["type"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "page", ec.unmarshalOInt2ᚖint32)
+	if err != nil {
+		return nil, err
+	}
+	args["page"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "offset", ec.unmarshalOInt2ᚖint32)
+	if err != nil {
+		return nil, err
+	}
+	args["offset"] = arg2
 	return args, nil
 }
 
@@ -438,12 +537,12 @@ func (ec *executionContext) field___Type_fields_args(ctx context.Context, rawArg
 
 // region    **************************** field.gotpl *****************************
 
-func (ec *executionContext) _Customer_id(ctx context.Context, field graphql.CollectedField, obj *model.Customer) (ret graphql.Marshaler) {
+func (ec *executionContext) _BusinessCustomer_id(ctx context.Context, field graphql.CollectedField, obj *model.BusinessCustomer) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
-		ec.fieldContext_Customer_id,
+		ec.fieldContext_BusinessCustomer_id,
 		func(ctx context.Context) (any, error) {
 			return obj.ID, nil
 		},
@@ -454,9 +553,9 @@ func (ec *executionContext) _Customer_id(ctx context.Context, field graphql.Coll
 	)
 }
 
-func (ec *executionContext) fieldContext_Customer_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_BusinessCustomer_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
-		Object:     "Customer",
+		Object:     "BusinessCustomer",
 		Field:      field,
 		IsMethod:   false,
 		IsResolver: false,
@@ -467,12 +566,12 @@ func (ec *executionContext) fieldContext_Customer_id(_ context.Context, field gr
 	return fc, nil
 }
 
-func (ec *executionContext) _Customer_name(ctx context.Context, field graphql.CollectedField, obj *model.Customer) (ret graphql.Marshaler) {
+func (ec *executionContext) _BusinessCustomer_name(ctx context.Context, field graphql.CollectedField, obj *model.BusinessCustomer) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
-		ec.fieldContext_Customer_name,
+		ec.fieldContext_BusinessCustomer_name,
 		func(ctx context.Context) (any, error) {
 			return obj.Name, nil
 		},
@@ -483,9 +582,9 @@ func (ec *executionContext) _Customer_name(ctx context.Context, field graphql.Co
 	)
 }
 
-func (ec *executionContext) fieldContext_Customer_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_BusinessCustomer_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
-		Object:     "Customer",
+		Object:     "BusinessCustomer",
 		Field:      field,
 		IsMethod:   false,
 		IsResolver: false,
@@ -496,12 +595,12 @@ func (ec *executionContext) fieldContext_Customer_name(_ context.Context, field 
 	return fc, nil
 }
 
-func (ec *executionContext) _Customer_email(ctx context.Context, field graphql.CollectedField, obj *model.Customer) (ret graphql.Marshaler) {
+func (ec *executionContext) _BusinessCustomer_email(ctx context.Context, field graphql.CollectedField, obj *model.BusinessCustomer) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
-		ec.fieldContext_Customer_email,
+		ec.fieldContext_BusinessCustomer_email,
 		func(ctx context.Context) (any, error) {
 			return obj.Email, nil
 		},
@@ -512,9 +611,125 @@ func (ec *executionContext) _Customer_email(ctx context.Context, field graphql.C
 	)
 }
 
-func (ec *executionContext) fieldContext_Customer_email(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_BusinessCustomer_email(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
-		Object:     "Customer",
+		Object:     "BusinessCustomer",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _BusinessCustomer_companyName(ctx context.Context, field graphql.CollectedField, obj *model.BusinessCustomer) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_BusinessCustomer_companyName,
+		func(ctx context.Context) (any, error) {
+			return obj.CompanyName, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_BusinessCustomer_companyName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BusinessCustomer",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _IndividualCustomer_id(ctx context.Context, field graphql.CollectedField, obj *model.IndividualCustomer) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_IndividualCustomer_id,
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		ec.marshalNID2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_IndividualCustomer_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "IndividualCustomer",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _IndividualCustomer_name(ctx context.Context, field graphql.CollectedField, obj *model.IndividualCustomer) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_IndividualCustomer_name,
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_IndividualCustomer_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "IndividualCustomer",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _IndividualCustomer_email(ctx context.Context, field graphql.CollectedField, obj *model.IndividualCustomer) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_IndividualCustomer_email,
+		func(ctx context.Context) (any, error) {
+			return obj.Email, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_IndividualCustomer_email(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "IndividualCustomer",
 		Field:      field,
 		IsMethod:   false,
 		IsResolver: false,
@@ -533,10 +748,10 @@ func (ec *executionContext) _Mutation_createCustomer(ctx context.Context, field 
 		ec.fieldContext_Mutation_createCustomer,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.resolvers.Mutation().CreateCustomer(ctx, fc.Args["name"].(string), fc.Args["email"].(string))
+			return ec.resolvers.Mutation().CreateCustomer(ctx, fc.Args["input"].(model.CreateCustomerInput))
 		},
 		nil,
-		ec.marshalNCustomer2ᚖgoᚑgraphqlᚑpocᚋgraphᚋmodelᚐCustomer,
+		ec.marshalNCustomerInterface2goᚑgraphqlᚑpocᚋgraphᚋmodelᚐCustomerInterface,
 		true,
 		true,
 	)
@@ -549,15 +764,7 @@ func (ec *executionContext) fieldContext_Mutation_createCustomer(ctx context.Con
 		IsMethod:   true,
 		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			switch field.Name {
-			case "id":
-				return ec.fieldContext_Customer_id(ctx, field)
-			case "name":
-				return ec.fieldContext_Customer_name(ctx, field)
-			case "email":
-				return ec.fieldContext_Customer_email(ctx, field)
-			}
-			return nil, fmt.Errorf("no field named %q was found under type Customer", field.Name)
+			return nil, errors.New("FieldContext.Child cannot be called on type INTERFACE")
 		},
 	}
 	defer func() {
@@ -582,10 +789,10 @@ func (ec *executionContext) _Mutation_updateCustomer(ctx context.Context, field 
 		ec.fieldContext_Mutation_updateCustomer,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.resolvers.Mutation().UpdateCustomer(ctx, fc.Args["id"].(string), fc.Args["name"].(*string), fc.Args["email"].(*string))
+			return ec.resolvers.Mutation().UpdateCustomer(ctx, fc.Args["id"].(string), fc.Args["name"].(*string), fc.Args["email"].(*string), fc.Args["companyName"].(*string))
 		},
 		nil,
-		ec.marshalNCustomer2ᚖgoᚑgraphqlᚑpocᚋgraphᚋmodelᚐCustomer,
+		ec.marshalNCustomerInterface2goᚑgraphqlᚑpocᚋgraphᚋmodelᚐCustomerInterface,
 		true,
 		true,
 	)
@@ -598,15 +805,7 @@ func (ec *executionContext) fieldContext_Mutation_updateCustomer(ctx context.Con
 		IsMethod:   true,
 		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			switch field.Name {
-			case "id":
-				return ec.fieldContext_Customer_id(ctx, field)
-			case "name":
-				return ec.fieldContext_Customer_name(ctx, field)
-			case "email":
-				return ec.fieldContext_Customer_email(ctx, field)
-			}
-			return nil, fmt.Errorf("no field named %q was found under type Customer", field.Name)
+			return nil, errors.New("FieldContext.Child cannot be called on type INTERFACE")
 		},
 	}
 	defer func() {
@@ -675,7 +874,7 @@ func (ec *executionContext) _Query_customers(ctx context.Context, field graphql.
 			return ec.resolvers.Query().Customers(ctx, fc.Args["page"].(*int32), fc.Args["offset"].(*int32))
 		},
 		nil,
-		ec.marshalNCustomer2ᚕᚖgoᚑgraphqlᚑpocᚋgraphᚋmodelᚐCustomerᚄ,
+		ec.marshalNCustomerInterface2ᚕgoᚑgraphqlᚑpocᚋgraphᚋmodelᚐCustomerInterfaceᚄ,
 		true,
 		true,
 	)
@@ -688,15 +887,7 @@ func (ec *executionContext) fieldContext_Query_customers(ctx context.Context, fi
 		IsMethod:   true,
 		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			switch field.Name {
-			case "id":
-				return ec.fieldContext_Customer_id(ctx, field)
-			case "name":
-				return ec.fieldContext_Customer_name(ctx, field)
-			case "email":
-				return ec.fieldContext_Customer_email(ctx, field)
-			}
-			return nil, fmt.Errorf("no field named %q was found under type Customer", field.Name)
+			return nil, errors.New("FieldContext.Child cannot be called on type INTERFACE")
 		},
 	}
 	defer func() {
@@ -724,7 +915,7 @@ func (ec *executionContext) _Query_customer(ctx context.Context, field graphql.C
 			return ec.resolvers.Query().Customer(ctx, fc.Args["id"].(string))
 		},
 		nil,
-		ec.marshalOCustomer2ᚖgoᚑgraphqlᚑpocᚋgraphᚋmodelᚐCustomer,
+		ec.marshalOCustomerInterface2goᚑgraphqlᚑpocᚋgraphᚋmodelᚐCustomerInterface,
 		true,
 		false,
 	)
@@ -737,15 +928,7 @@ func (ec *executionContext) fieldContext_Query_customer(ctx context.Context, fie
 		IsMethod:   true,
 		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			switch field.Name {
-			case "id":
-				return ec.fieldContext_Customer_id(ctx, field)
-			case "name":
-				return ec.fieldContext_Customer_name(ctx, field)
-			case "email":
-				return ec.fieldContext_Customer_email(ctx, field)
-			}
-			return nil, fmt.Errorf("no field named %q was found under type Customer", field.Name)
+			return nil, errors.New("FieldContext.Child cannot be called on type INTERFACE")
 		},
 	}
 	defer func() {
@@ -756,6 +939,47 @@ func (ec *executionContext) fieldContext_Query_customer(ctx context.Context, fie
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Query_customer_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_customersByType(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_customersByType,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.resolvers.Query().CustomersByType(ctx, fc.Args["type"].(model.CustomerType), fc.Args["page"].(*int32), fc.Args["offset"].(*int32))
+		},
+		nil,
+		ec.marshalNCustomerInterface2ᚕgoᚑgraphqlᚑpocᚋgraphᚋmodelᚐCustomerInterfaceᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_customersByType(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("FieldContext.Child cannot be called on type INTERFACE")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_customersByType_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -2316,37 +2540,166 @@ func (ec *executionContext) fieldContext___Type_isOneOf(_ context.Context, field
 
 // region    **************************** input.gotpl *****************************
 
+func (ec *executionContext) unmarshalInputCreateCustomerInput(ctx context.Context, obj any) (model.CreateCustomerInput, error) {
+	var it model.CreateCustomerInput
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	if _, present := asMap["type"]; !present {
+		asMap["type"] = "INDIVIDUAL"
+	}
+
+	fieldsInOrder := [...]string{"name", "email", "type", "companyName"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "name":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Name = data
+		case "email":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("email"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Email = data
+		case "type":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("type"))
+			data, err := ec.unmarshalOCustomerType2ᚖgoᚑgraphqlᚑpocᚋgraphᚋmodelᚐCustomerType(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Type = data
+		case "companyName":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("companyName"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.CompanyName = data
+		}
+	}
+
+	return it, nil
+}
+
 // endregion **************************** input.gotpl *****************************
 
 // region    ************************** interface.gotpl ***************************
+
+func (ec *executionContext) _CustomerInterface(ctx context.Context, sel ast.SelectionSet, obj model.CustomerInterface) graphql.Marshaler {
+	switch obj := (obj).(type) {
+	case nil:
+		return graphql.Null
+	case model.IndividualCustomer:
+		return ec._IndividualCustomer(ctx, sel, &obj)
+	case *model.IndividualCustomer:
+		if obj == nil {
+			return graphql.Null
+		}
+		return ec._IndividualCustomer(ctx, sel, obj)
+	case model.BusinessCustomer:
+		return ec._BusinessCustomer(ctx, sel, &obj)
+	case *model.BusinessCustomer:
+		if obj == nil {
+			return graphql.Null
+		}
+		return ec._BusinessCustomer(ctx, sel, obj)
+	default:
+		panic(fmt.Errorf("unexpected type %T", obj))
+	}
+}
 
 // endregion ************************** interface.gotpl ***************************
 
 // region    **************************** object.gotpl ****************************
 
-var customerImplementors = []string{"Customer"}
+var businessCustomerImplementors = []string{"BusinessCustomer", "CustomerInterface"}
 
-func (ec *executionContext) _Customer(ctx context.Context, sel ast.SelectionSet, obj *model.Customer) graphql.Marshaler {
-	fields := graphql.CollectFields(ec.OperationContext, sel, customerImplementors)
+func (ec *executionContext) _BusinessCustomer(ctx context.Context, sel ast.SelectionSet, obj *model.BusinessCustomer) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, businessCustomerImplementors)
 
 	out := graphql.NewFieldSet(fields)
 	deferred := make(map[string]*graphql.FieldSet)
 	for i, field := range fields {
 		switch field.Name {
 		case "__typename":
-			out.Values[i] = graphql.MarshalString("Customer")
+			out.Values[i] = graphql.MarshalString("BusinessCustomer")
 		case "id":
-			out.Values[i] = ec._Customer_id(ctx, field, obj)
+			out.Values[i] = ec._BusinessCustomer_id(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
 		case "name":
-			out.Values[i] = ec._Customer_name(ctx, field, obj)
+			out.Values[i] = ec._BusinessCustomer_name(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
 		case "email":
-			out.Values[i] = ec._Customer_email(ctx, field, obj)
+			out.Values[i] = ec._BusinessCustomer_email(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "companyName":
+			out.Values[i] = ec._BusinessCustomer_companyName(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var individualCustomerImplementors = []string{"IndividualCustomer", "CustomerInterface"}
+
+func (ec *executionContext) _IndividualCustomer(ctx context.Context, sel ast.SelectionSet, obj *model.IndividualCustomer) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, individualCustomerImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("IndividualCustomer")
+		case "id":
+			out.Values[i] = ec._IndividualCustomer_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "name":
+			out.Values[i] = ec._IndividualCustomer_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "email":
+			out.Values[i] = ec._IndividualCustomer_email(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -2487,6 +2840,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_customer(ctx, field)
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "customersByType":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_customersByType(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
 				return res
 			}
 
@@ -2878,11 +3253,22 @@ func (ec *executionContext) marshalNBoolean2bool(ctx context.Context, sel ast.Se
 	return res
 }
 
-func (ec *executionContext) marshalNCustomer2goᚑgraphqlᚑpocᚋgraphᚋmodelᚐCustomer(ctx context.Context, sel ast.SelectionSet, v model.Customer) graphql.Marshaler {
-	return ec._Customer(ctx, sel, &v)
+func (ec *executionContext) unmarshalNCreateCustomerInput2goᚑgraphqlᚑpocᚋgraphᚋmodelᚐCreateCustomerInput(ctx context.Context, v any) (model.CreateCustomerInput, error) {
+	res, err := ec.unmarshalInputCreateCustomerInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
 }
 
-func (ec *executionContext) marshalNCustomer2ᚕᚖgoᚑgraphqlᚑpocᚋgraphᚋmodelᚐCustomerᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.Customer) graphql.Marshaler {
+func (ec *executionContext) marshalNCustomerInterface2goᚑgraphqlᚑpocᚋgraphᚋmodelᚐCustomerInterface(ctx context.Context, sel ast.SelectionSet, v model.CustomerInterface) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._CustomerInterface(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNCustomerInterface2ᚕgoᚑgraphqlᚑpocᚋgraphᚋmodelᚐCustomerInterfaceᚄ(ctx context.Context, sel ast.SelectionSet, v []model.CustomerInterface) graphql.Marshaler {
 	ret := make(graphql.Array, len(v))
 	var wg sync.WaitGroup
 	isLen1 := len(v) == 1
@@ -2906,7 +3292,7 @@ func (ec *executionContext) marshalNCustomer2ᚕᚖgoᚑgraphqlᚑpocᚋgraphᚋ
 			if !isLen1 {
 				defer wg.Done()
 			}
-			ret[i] = ec.marshalNCustomer2ᚖgoᚑgraphqlᚑpocᚋgraphᚋmodelᚐCustomer(ctx, sel, v[i])
+			ret[i] = ec.marshalNCustomerInterface2goᚑgraphqlᚑpocᚋgraphᚋmodelᚐCustomerInterface(ctx, sel, v[i])
 		}
 		if isLen1 {
 			f(i)
@@ -2926,14 +3312,14 @@ func (ec *executionContext) marshalNCustomer2ᚕᚖgoᚑgraphqlᚑpocᚋgraphᚋ
 	return ret
 }
 
-func (ec *executionContext) marshalNCustomer2ᚖgoᚑgraphqlᚑpocᚋgraphᚋmodelᚐCustomer(ctx context.Context, sel ast.SelectionSet, v *model.Customer) graphql.Marshaler {
-	if v == nil {
-		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
-			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
-		}
-		return graphql.Null
-	}
-	return ec._Customer(ctx, sel, v)
+func (ec *executionContext) unmarshalNCustomerType2goᚑgraphqlᚑpocᚋgraphᚋmodelᚐCustomerType(ctx context.Context, v any) (model.CustomerType, error) {
+	var res model.CustomerType
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNCustomerType2goᚑgraphqlᚑpocᚋgraphᚋmodelᚐCustomerType(ctx context.Context, sel ast.SelectionSet, v model.CustomerType) graphql.Marshaler {
+	return v
 }
 
 func (ec *executionContext) unmarshalNID2string(ctx context.Context, v any) (string, error) {
@@ -3251,11 +3637,27 @@ func (ec *executionContext) marshalOBoolean2ᚖbool(ctx context.Context, sel ast
 	return res
 }
 
-func (ec *executionContext) marshalOCustomer2ᚖgoᚑgraphqlᚑpocᚋgraphᚋmodelᚐCustomer(ctx context.Context, sel ast.SelectionSet, v *model.Customer) graphql.Marshaler {
+func (ec *executionContext) marshalOCustomerInterface2goᚑgraphqlᚑpocᚋgraphᚋmodelᚐCustomerInterface(ctx context.Context, sel ast.SelectionSet, v model.CustomerInterface) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
 	}
-	return ec._Customer(ctx, sel, v)
+	return ec._CustomerInterface(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalOCustomerType2ᚖgoᚑgraphqlᚑpocᚋgraphᚋmodelᚐCustomerType(ctx context.Context, v any) (*model.CustomerType, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var res = new(model.CustomerType)
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOCustomerType2ᚖgoᚑgraphqlᚑpocᚋgraphᚋmodelᚐCustomerType(ctx context.Context, sel ast.SelectionSet, v *model.CustomerType) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return v
 }
 
 func (ec *executionContext) unmarshalOInt2ᚖint32(ctx context.Context, v any) (*int32, error) {

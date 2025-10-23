@@ -2,19 +2,50 @@
 #
 # https://gqlgen.com/getting-started/
 
-type Customer {
-     id: ID!
-     name: String!
-     email: String!
- }
+# Base interface for all customer types
+interface CustomerInterface {
+    id: ID!
+    name: String!
+    email: String!
+}
 
- type Query {
-     customers(page:Int = 2, offset:Int = 0): [Customer!]!
-     customer(id: ID!): Customer
- }
+# Individual customer type
+type IndividualCustomer implements CustomerInterface {
+    id: ID!
+    name: String!
+    email: String!
+}
 
- type Mutation {
-     createCustomer(name: String!, email: String!): Customer!
-     updateCustomer(id: ID!, name: String, email: String): Customer!
-     deleteCustomer(id: ID!): Boolean!
- }
+# Business customer type
+type BusinessCustomer implements CustomerInterface {
+    id: ID!
+    name: String!
+    email: String!
+    companyName: String!
+}
+
+# Customer type enum
+enum CustomerType {
+    INDIVIDUAL
+    BUSINESS
+}
+
+# Input types for creating customers
+input CreateCustomerInput {
+    name: String!
+    email: String!
+    type: CustomerType = INDIVIDUAL
+    companyName: String
+}
+
+type Query {
+    customers(page: Int = 2, offset: Int = 0): [CustomerInterface!]!
+    customer(id: ID!): CustomerInterface
+    customersByType(type: CustomerType!, page: Int = 2, offset: Int = 0): [CustomerInterface!]!
+}
+
+type Mutation {
+    createCustomer(input: CreateCustomerInput!): CustomerInterface!
+    updateCustomer(id: ID!, name: String, email: String, companyName: String): CustomerInterface!
+    deleteCustomer(id: ID!): Boolean!
+}

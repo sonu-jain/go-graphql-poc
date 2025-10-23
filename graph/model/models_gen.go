@@ -2,14 +2,107 @@
 
 package model
 
-type Customer struct {
+import (
+	"bytes"
+	"fmt"
+	"io"
+	"strconv"
+)
+
+type CustomerInterface interface {
+	IsCustomerInterface()
+	GetID() string
+	GetName() string
+	GetEmail() string
+}
+
+type BusinessCustomer struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Email       string `json:"email"`
+	CompanyName string `json:"companyName"`
+}
+
+func (BusinessCustomer) IsCustomerInterface()  {}
+func (this BusinessCustomer) GetID() string    { return this.ID }
+func (this BusinessCustomer) GetName() string  { return this.Name }
+func (this BusinessCustomer) GetEmail() string { return this.Email }
+
+type CreateCustomerInput struct {
+	Name        string        `json:"name"`
+	Email       string        `json:"email"`
+	Type        *CustomerType `json:"type,omitempty"`
+	CompanyName *string       `json:"companyName,omitempty"`
+}
+
+type IndividualCustomer struct {
 	ID    string `json:"id"`
 	Name  string `json:"name"`
 	Email string `json:"email"`
 }
 
+func (IndividualCustomer) IsCustomerInterface()  {}
+func (this IndividualCustomer) GetID() string    { return this.ID }
+func (this IndividualCustomer) GetName() string  { return this.Name }
+func (this IndividualCustomer) GetEmail() string { return this.Email }
+
 type Mutation struct {
 }
 
 type Query struct {
+}
+
+type CustomerType string
+
+const (
+	CustomerTypeIndividual CustomerType = "INDIVIDUAL"
+	CustomerTypeBusiness   CustomerType = "BUSINESS"
+)
+
+var AllCustomerType = []CustomerType{
+	CustomerTypeIndividual,
+	CustomerTypeBusiness,
+}
+
+func (e CustomerType) IsValid() bool {
+	switch e {
+	case CustomerTypeIndividual, CustomerTypeBusiness:
+		return true
+	}
+	return false
+}
+
+func (e CustomerType) String() string {
+	return string(e)
+}
+
+func (e *CustomerType) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = CustomerType(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid CustomerType", str)
+	}
+	return nil
+}
+
+func (e CustomerType) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *CustomerType) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e CustomerType) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
 }

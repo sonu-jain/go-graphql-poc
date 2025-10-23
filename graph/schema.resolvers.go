@@ -8,47 +8,80 @@ import (
 	"context"
 	"go-graphql-poc/db"
 	"go-graphql-poc/graph/model"
+	"go-graphql-poc/validator"
 	"strconv"
 )
 
 // CreateCustomer is the resolver for the createCustomer field.
-func (r *mutationResolver) CreateCustomer(ctx context.Context, name string, email string) (*model.Customer, error) {
-	customer := &db.Customer{Name: name, Email: email}
-	var customerModel *model.Customer
-	result := db.DB.Create(customer)
-	if result.Error == nil {
-		customerModel = &model.Customer{Name: name, Email: email, ID: strconv.FormatUint(uint64(customer.ID), 10)}
+func (r *mutationResolver) CreateCustomer(ctx context.Context, input model.CreateCustomerInput) (model.CustomerInterface, error) {
+	// Validate input
+	if err := validator.ValidateCustomerCreate(input.Name, input.Email); err != nil {
+		return nil, err
 	}
 
-	return customerModel, result.Error
+	customerType := db.CustomerTypeIndividual // default
+	if input.Type != nil {
+		customerType = db.CustomerType(*input.Type)
+	}
+
+	customer := &db.Customer{
+		Name:  input.Name,
+		Email: input.Email,
+		Type:  customerType,
+	}
+
+	// Set company name for business customers
+	if customerType == db.CustomerTypeBusiness && input.CompanyName != nil {
+		customer.CompanyName = input.CompanyName
+	}
+
+	result := db.DB.Create(customer)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+
+	// Return the appropriate customer type based on interface
+	return convertToCustomerInterface(customer), nil
 }
 
 // UpdateCustomer is the resolver for the updateCustomer field.
-func (r *mutationResolver) UpdateCustomer(ctx context.Context, id string, name *string, email *string) (*model.Customer, error) {
+func (r *mutationResolver) UpdateCustomer(ctx context.Context, id string, name *string, email *string, companyName *string) (model.CustomerInterface, error) {
+	// Validate input
+	if err := validator.ValidateID(id); err != nil {
+		return nil, err
+	}
+
 	cid, _ := strconv.Atoi(id)
 	var customer db.Customer
-	var customerModel model.Customer
 	if err := db.DB.First(&customer, cid).Error; err != nil {
 		return nil, err
 	}
 
-	customerModel.ID = strconv.FormatUint(uint64(customer.ID), 10)
-	customerModel.Name = customer.Name
-	customerModel.Email = customer.Email
+	// Update fields if provided
 	if name != nil {
 		customer.Name = *name
-		customerModel.Name = *name
 	}
 	if email != nil {
 		customer.Email = *email
-		customerModel.Email = *email
 	}
-	db.DB.Save(&customer)
-	return &customerModel, nil
+	if companyName != nil {
+		customer.CompanyName = companyName
+	}
+
+	if err := db.DB.Save(&customer).Error; err != nil {
+		return nil, err
+	}
+
+	return convertToCustomerInterface(&customer), nil
 }
 
 // DeleteCustomer is the resolver for the deleteCustomer field.
 func (r *mutationResolver) DeleteCustomer(ctx context.Context, id string) (bool, error) {
+	// Validate input
+	if err := validator.ValidateID(id); err != nil {
+		return false, err
+	}
+
 	cid, _ := strconv.Atoi(id)
 	if err := db.DB.Delete(&db.Customer{}, cid).Error; err != nil {
 		return false, err
@@ -57,40 +90,86 @@ func (r *mutationResolver) DeleteCustomer(ctx context.Context, id string) (bool,
 }
 
 // Customers is the resolver for the customers field.
-func (r *queryResolver) Customers(ctx context.Context, page *int32, offset *int32) ([]*model.Customer, error) {
-	var customers []*db.Customer
-	var customersModel []*model.Customer
+func (r *queryResolver) Customers(ctx context.Context, page *int32, offset *int32) ([]model.CustomerInterface, error) {
+	// Validate pagination parameters
+	if err := validator.ValidatePagination(page, offset); err != nil {
+		return nil, err
+	}
 
+	var customers []*db.Customer
 	result := db.DB.Limit(int(*page)).Offset(int(*offset)).Find(&customers)
 	if result.Error != nil {
 		return nil, result.Error
 	}
 
+	var customerInterfaces []model.CustomerInterface
 	for _, customer := range customers {
-		customersModel = append(customersModel, &model.Customer{
-			ID:    strconv.Itoa(int(customer.ID)),
-			Name:  customer.Name,
-			Email: customer.Email,
-		})
+		customerInterfaces = append(customerInterfaces, convertToCustomerInterface(customer))
 	}
 
-	return customersModel, result.Error
+	return customerInterfaces, nil
 }
 
 // Customer is the resolver for the customer field.
-func (r *queryResolver) Customer(ctx context.Context, id string) (*model.Customer, error) {
+func (r *queryResolver) Customer(ctx context.Context, id string) (model.CustomerInterface, error) {
+	// Validate input
+	if err := validator.ValidateID(id); err != nil {
+		return nil, err
+	}
+
 	var customer db.Customer
-	var customerModel model.Customer
 	cid, _ := strconv.Atoi(id)
 	result := db.DB.First(&customer, cid)
 	if result.Error != nil {
 		return nil, result.Error
 	}
 
-	customerModel.ID = strconv.FormatUint(uint64(customer.ID), 10)
-	customerModel.Name = customer.Name
-	customerModel.Email = customer.Email
-	return &customerModel, nil
+	return convertToCustomerInterface(&customer), nil
+}
+
+// CustomersByType is the resolver for the customersByType field.
+func (r *queryResolver) CustomersByType(ctx context.Context, customerType model.CustomerType, page *int32, offset *int32) ([]model.CustomerInterface, error) {
+	// Validate pagination parameters
+	if err := validator.ValidatePagination(page, offset); err != nil {
+		return nil, err
+	}
+
+	var customers []*db.Customer
+	dbType := db.CustomerType(customerType)
+	result := db.DB.Where("type = ?", dbType).Limit(int(*page)).Offset(int(*offset)).Find(&customers)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+
+	var customerInterfaces []model.CustomerInterface
+	for _, customer := range customers {
+		customerInterfaces = append(customerInterfaces, convertToCustomerInterface(customer))
+	}
+
+	return customerInterfaces, nil
+}
+
+// Helper function to convert db.Customer to appropriate GraphQL interface type
+func convertToCustomerInterface(customer *db.Customer) model.CustomerInterface {
+	switch customer.Type {
+	case db.CustomerTypeBusiness:
+		companyName := ""
+		if customer.CompanyName != nil {
+			companyName = *customer.CompanyName
+		}
+		return &model.BusinessCustomer{
+			ID:          strconv.FormatUint(uint64(customer.ID), 10),
+			Name:        customer.Name,
+			Email:       customer.Email,
+			CompanyName: companyName,
+		}
+	default: // Individual
+		return &model.IndividualCustomer{
+			ID:    strconv.FormatUint(uint64(customer.ID), 10),
+			Name:  customer.Name,
+			Email: customer.Email,
+		}
+	}
 }
 
 // Mutation returns MutationResolver implementation.
