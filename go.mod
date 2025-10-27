@@ -5,6 +5,7 @@ go 1.24.5
 require (
 	github.com/99designs/gqlgen v0.17.81
 	github.com/golang-jwt/jwt/v5 v5.3.0
+	github.com/machinebox/graphql v0.2.2
 	github.com/vektah/gqlparser/v2 v2.5.30
 	golang.org/x/crypto v0.43.0
 	gorm.io/driver/postgres v1.6.0
@@ -25,6 +26,8 @@ require (
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/kr/text v0.2.0 // indirect
+	github.com/matryer/is v1.4.1 // indirect
+	github.com/pkg/errors v0.9.1 // indirect
 	github.com/rogpeppe/go-internal v1.6.1 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/sosodev/duration v1.3.1 // indirect
