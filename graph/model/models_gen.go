@@ -64,6 +64,7 @@ type BusinessInfoInput struct {
 type CreateBusinessCustomerInput struct {
 	Name         string             `json:"name"`
 	Email        string             `json:"email"`
+	Password     string             `json:"password"`
 	CompanyName  string             `json:"companyName"`
 	BusinessInfo *BusinessInfoInput `json:"businessInfo,omitempty"`
 }
@@ -71,12 +72,14 @@ type CreateBusinessCustomerInput struct {
 type CreateIndividualCustomerInput struct {
 	Name         string             `json:"name"`
 	Email        string             `json:"email"`
+	Password     string             `json:"password"`
 	PersonalInfo *PersonalInfoInput `json:"personalInfo,omitempty"`
 }
 
 type CreatePremiumCustomerInput struct {
 	Name        string `json:"name"`
 	Email       string `json:"email"`
+	Password    string `json:"password"`
 	PremiumTier string `json:"premiumTier"`
 }
 
@@ -99,6 +102,16 @@ func (this IndividualCustomer) GetUpdatedAt() string { return this.UpdatedAt }
 func (IndividualCustomer) IsCustomerResult() {}
 
 func (IndividualCustomer) IsCustomerOperationResult() {}
+
+type LoginInput struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+type LoginResponse struct {
+	Token    string            `json:"token"`
+	Customer CustomerInterface `json:"customer"`
+}
 
 type Mutation struct {
 }

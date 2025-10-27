@@ -22,6 +22,7 @@ type Customer struct {
 	ID          uint `gorm:"primaryKey"`
 	Name        string
 	Email       string         `gorm:"unique"`
+	Password    string         `gorm:"type:varchar(255)"` // Hashed password
 	Type        CustomerType   `gorm:"type:varchar(20);default:'INDIVIDUAL'"`
 	Status      CustomerStatus `gorm:"type:varchar(20);default:'ACTIVE'"`
 	CompanyName *string        `gorm:"type:varchar(255)"` // For business customers

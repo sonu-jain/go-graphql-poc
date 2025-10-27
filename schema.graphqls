@@ -90,12 +90,14 @@ enum CustomerStatus {
 input CreateIndividualCustomerInput {
     name: String!
     email: String!
+    password: String!
     personalInfo: PersonalInfoInput
 }
 
 input CreateBusinessCustomerInput {
     name: String!
     email: String!
+    password: String!
     companyName: String!
     businessInfo: BusinessInfoInput
 }
@@ -103,6 +105,7 @@ input CreateBusinessCustomerInput {
 input CreatePremiumCustomerInput {
     name: String!
     email: String!
+    password: String!
     premiumTier: String!
 }
 
@@ -128,6 +131,18 @@ input UpdateCustomerInput {
     businessInfo: BusinessInfoInput
 }
 
+# Login input
+input LoginInput {
+    email: String!
+    password: String!
+}
+
+# Login response
+type LoginResponse {
+    token: String!
+    customer: CustomerInterface!
+}
+
 type Query {
     # Interface-based queries
     customers(page: Int = 2, offset: Int = 0): [CustomerInterface!]!
@@ -141,6 +156,9 @@ type Query {
     # Advanced queries
     customersByStatus(status: CustomerStatus!, page: Int = 2, offset: Int = 0): [CustomerInterface!]!
     premiumCustomersByTier(tier: String!, page: Int = 2, offset: Int = 0): [PremiumCustomer!]!
+    
+    # Authentication
+    login(input: LoginInput!): LoginResponse!
 }
 
 type Mutation {

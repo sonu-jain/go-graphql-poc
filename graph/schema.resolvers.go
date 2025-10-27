@@ -7,6 +7,7 @@ package graph
 import (
 	"context"
 	"fmt"
+	"go-graphql-poc/auth"
 	"go-graphql-poc/db"
 	"go-graphql-poc/graph/model"
 	"go-graphql-poc/validator"
@@ -14,131 +15,6 @@ import (
 	"strings"
 	"time"
 )
-
-// CreateIndividualCustomer is the resolver for the createIndividualCustomer field.
-func (r *mutationResolver) CreateIndividualCustomer(ctx context.Context, input model.CreateIndividualCustomerInput) (*model.IndividualCustomer, error) {
-	// Validate input
-	if err := validator.ValidateCustomerCreate(input.Name, input.Email); err != nil {
-		return nil, err
-	}
-
-	customer := &db.Customer{
-		Name:   input.Name,
-		Email:  input.Email,
-		Type:   db.CustomerTypeIndividual,
-		Status: db.CustomerStatusActive,
-	}
-
-	// Set personal info if provided
-	if input.PersonalInfo != nil {
-		customer.Phone = input.PersonalInfo.Phone
-		customer.Address = input.PersonalInfo.Address
-		customer.DateOfBirth = input.PersonalInfo.DateOfBirth
-	}
-
-	result := db.DB.Create(customer)
-	if result.Error != nil {
-		return nil, result.Error
-	}
-
-	return convertToIndividualCustomer(customer), nil
-}
-
-// CreateBusinessCustomer is the resolver for the createBusinessCustomer field.
-func (r *mutationResolver) CreateBusinessCustomer(ctx context.Context, input model.CreateBusinessCustomerInput) (*model.BusinessCustomer, error) {
-	// Validate input
-	if err := validator.ValidateCustomerCreate(input.Name, input.Email); err != nil {
-		return nil, err
-	}
-
-	customer := &db.Customer{
-		Name:        input.Name,
-		Email:       input.Email,
-		Type:        db.CustomerTypeBusiness,
-		Status:      db.CustomerStatusActive,
-		CompanyName: &input.CompanyName,
-	}
-
-	// Set business info if provided
-	if input.BusinessInfo != nil {
-		customer.TaxID = input.BusinessInfo.TaxID
-		customer.Industry = input.BusinessInfo.Industry
-		if input.BusinessInfo.EmployeeCount != nil {
-			employeeCount := int(*input.BusinessInfo.EmployeeCount)
-			customer.EmployeeCount = &employeeCount
-		}
-		customer.Website = input.BusinessInfo.Website
-	}
-
-	result := db.DB.Create(customer)
-	if result.Error != nil {
-		return nil, result.Error
-	}
-
-	return convertToBusinessCustomer(customer), nil
-}
-
-// CreatePremiumCustomer is the resolver for the createPremiumCustomer field.
-func (r *mutationResolver) CreatePremiumCustomer(ctx context.Context, input model.CreatePremiumCustomerInput) (*model.PremiumCustomer, error) {
-	// Validate input
-	if err := validator.ValidateCustomerCreate(input.Name, input.Email); err != nil {
-		return nil, err
-	}
-
-	customer := &db.Customer{
-		Name:        input.Name,
-		Email:       input.Email,
-		Type:        db.CustomerTypePremium,
-		Status:      db.CustomerStatusActive,
-		PremiumTier: &input.PremiumTier,
-	}
-
-	result := db.DB.Create(customer)
-	if result.Error != nil {
-		return nil, result.Error
-	}
-
-	return convertToPremiumCustomer(customer), nil
-}
-
-// CreateCustomerWithErrorHandling is the resolver for the createCustomerWithErrorHandling field.
-func (r *mutationResolver) CreateCustomerWithErrorHandling(ctx context.Context, input model.CreateIndividualCustomerInput) (model.CustomerOperationResult, error) {
-	// Validate input
-	if err := validator.ValidateCustomerCreate(input.Name, input.Email); err != nil {
-		field := "input"
-		return &model.OperationError{
-			Code:    "VALIDATION_ERROR",
-			Message: err.Error(),
-			Field:   &field,
-		}, nil
-	}
-
-	customer := &db.Customer{
-		Name:   input.Name,
-		Email:  input.Email,
-		Type:   db.CustomerTypeIndividual,
-		Status: db.CustomerStatusActive,
-	}
-
-	// Set personal info if provided
-	if input.PersonalInfo != nil {
-		customer.Phone = input.PersonalInfo.Phone
-		customer.Address = input.PersonalInfo.Address
-		customer.DateOfBirth = input.PersonalInfo.DateOfBirth
-	}
-
-	result := db.DB.Create(customer)
-	if result.Error != nil {
-		field := "database"
-		return &model.OperationError{
-			Code:    "DATABASE_ERROR",
-			Message: result.Error.Error(),
-			Field:   &field,
-		}, nil
-	}
-
-	return convertToIndividualCustomer(customer), nil
-}
 
 // UpdateCustomer is the resolver for the updateCustomer field.
 func (r *mutationResolver) UpdateCustomer(ctx context.Context, id string, input model.UpdateCustomerInput) (model.CustomerInterface, error) {
@@ -206,6 +82,164 @@ func (r *mutationResolver) DeleteCustomer(ctx context.Context, id string) (bool,
 	return true, nil
 }
 
+// CreateCustomerWithErrorHandling is the resolver for the createCustomerWithErrorHandling field.
+func (r *mutationResolver) CreateCustomerWithErrorHandling(ctx context.Context, input model.CreateIndividualCustomerInput) (model.CustomerOperationResult, error) {
+	// Validate input
+	if err := validator.ValidateCustomerCreate(input.Name, input.Email); err != nil {
+		field := "input"
+		return &model.OperationError{
+			Code:    "VALIDATION_ERROR",
+			Message: err.Error(),
+			Field:   &field,
+		}, nil
+	}
+
+	// Hash password
+	hashedPassword, err := auth.HashPassword(input.Password)
+	if err != nil {
+		field := "password"
+		return &model.OperationError{
+			Code:    "PASSWORD_ERROR",
+			Message: "Failed to hash password",
+			Field:   &field,
+		}, nil
+	}
+
+	customer := &db.Customer{
+		Name:     input.Name,
+		Email:    input.Email,
+		Password: hashedPassword,
+		Type:     db.CustomerTypeIndividual,
+		Status:   db.CustomerStatusActive,
+	}
+
+	// Set personal info if provided
+	if input.PersonalInfo != nil {
+		customer.Phone = input.PersonalInfo.Phone
+		customer.Address = input.PersonalInfo.Address
+		customer.DateOfBirth = input.PersonalInfo.DateOfBirth
+	}
+
+	result := db.DB.Create(customer)
+	if result.Error != nil {
+		field := "database"
+		return &model.OperationError{
+			Code:    "DATABASE_ERROR",
+			Message: result.Error.Error(),
+			Field:   &field,
+		}, nil
+	}
+
+	return convertToIndividualCustomer(customer), nil
+}
+
+// CreateIndividualCustomer is the resolver for the createIndividualCustomer field.
+func (r *mutationResolver) CreateIndividualCustomer(ctx context.Context, input model.CreateIndividualCustomerInput) (*model.IndividualCustomer, error) {
+	// Validate input
+	if err := validator.ValidateCustomerCreate(input.Name, input.Email); err != nil {
+		return nil, err
+	}
+
+	// Hash password
+	hashedPassword, err := auth.HashPassword(input.Password)
+	if err != nil {
+		return nil, fmt.Errorf("failed to hash password")
+	}
+
+	customer := &db.Customer{
+		Name:     input.Name,
+		Email:    input.Email,
+		Password: hashedPassword,
+		Type:     db.CustomerTypeIndividual,
+		Status:   db.CustomerStatusActive,
+	}
+
+	// Set personal info if provided
+	if input.PersonalInfo != nil {
+		customer.Phone = input.PersonalInfo.Phone
+		customer.Address = input.PersonalInfo.Address
+		customer.DateOfBirth = input.PersonalInfo.DateOfBirth
+	}
+
+	result := db.DB.Create(customer)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+
+	return convertToIndividualCustomer(customer), nil
+}
+
+// CreateBusinessCustomer is the resolver for the createBusinessCustomer field.
+func (r *mutationResolver) CreateBusinessCustomer(ctx context.Context, input model.CreateBusinessCustomerInput) (*model.BusinessCustomer, error) {
+	// Validate input
+	if err := validator.ValidateCustomerCreate(input.Name, input.Email); err != nil {
+		return nil, err
+	}
+
+	// Hash password
+	hashedPassword, err := auth.HashPassword(input.Password)
+	if err != nil {
+		return nil, fmt.Errorf("failed to hash password")
+	}
+
+	customer := &db.Customer{
+		Name:        input.Name,
+		Email:       input.Email,
+		Password:    hashedPassword,
+		Type:        db.CustomerTypeBusiness,
+		Status:      db.CustomerStatusActive,
+		CompanyName: &input.CompanyName,
+	}
+
+	// Set business info if provided
+	if input.BusinessInfo != nil {
+		customer.TaxID = input.BusinessInfo.TaxID
+		customer.Industry = input.BusinessInfo.Industry
+		if input.BusinessInfo.EmployeeCount != nil {
+			employeeCount := int(*input.BusinessInfo.EmployeeCount)
+			customer.EmployeeCount = &employeeCount
+		}
+		customer.Website = input.BusinessInfo.Website
+	}
+
+	result := db.DB.Create(customer)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+
+	return convertToBusinessCustomer(customer), nil
+}
+
+// CreatePremiumCustomer is the resolver for the createPremiumCustomer field.
+func (r *mutationResolver) CreatePremiumCustomer(ctx context.Context, input model.CreatePremiumCustomerInput) (*model.PremiumCustomer, error) {
+	// Validate input
+	if err := validator.ValidateCustomerCreate(input.Name, input.Email); err != nil {
+		return nil, err
+	}
+
+	// Hash password
+	hashedPassword, err := auth.HashPassword(input.Password)
+	if err != nil {
+		return nil, fmt.Errorf("failed to hash password")
+	}
+
+	customer := &db.Customer{
+		Name:        input.Name,
+		Email:       input.Email,
+		Password:    hashedPassword,
+		Type:        db.CustomerTypePremium,
+		Status:      db.CustomerStatusActive,
+		PremiumTier: &input.PremiumTier,
+	}
+
+	result := db.DB.Create(customer)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+
+	return convertToPremiumCustomer(customer), nil
+}
+
 // Customers is the resolver for the customers field.
 func (r *queryResolver) Customers(ctx context.Context, page *int32, offset *int32) ([]model.CustomerInterface, error) {
 	// Validate pagination parameters
@@ -245,14 +279,14 @@ func (r *queryResolver) Customer(ctx context.Context, id string) (model.Customer
 }
 
 // CustomersByType is the resolver for the customersByType field.
-func (r *queryResolver) CustomersByType(ctx context.Context, customerType model.CustomerType, page *int32, offset *int32) ([]model.CustomerInterface, error) {
+func (r *queryResolver) CustomersByType(ctx context.Context, typeArg model.CustomerType, page *int32, offset *int32) ([]model.CustomerInterface, error) {
 	// Validate pagination parameters
 	if err := validator.ValidatePagination(page, offset); err != nil {
 		return nil, err
 	}
 
 	var customers []*db.Customer
-	dbType := db.CustomerType(customerType)
+	dbType := db.CustomerType(typeArg)
 	result := db.DB.Where("type = ?", dbType).Limit(int(*page)).Offset(int(*offset)).Find(&customers)
 	if result.Error != nil {
 		return nil, result.Error
@@ -379,6 +413,49 @@ func (r *queryResolver) PremiumCustomersByTier(ctx context.Context, tier string,
 	return premiumCustomers, nil
 }
 
+// Login is the resolver for the login field.
+func (r *queryResolver) Login(ctx context.Context, input model.LoginInput) (*model.LoginResponse, error) {
+	// Find customer by email
+	var customer db.Customer
+	result := db.DB.Where("email = ?", input.Email).First(&customer)
+	if result.Error != nil {
+		return nil, fmt.Errorf("invalid email or password")
+	}
+
+	// Check password
+	if !auth.CheckPasswordHash(input.Password, customer.Password) {
+		return nil, fmt.Errorf("invalid email or password")
+	}
+
+	// Check if customer is active
+	if customer.Status != db.CustomerStatusActive {
+		return nil, fmt.Errorf("account is not active")
+	}
+
+	// Generate JWT token
+	token, err := auth.GenerateToken(customer.ID, customer.Email)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate token")
+	}
+
+	// Convert customer to GraphQL type
+	customerInterface := convertToCustomerInterface(&customer)
+
+	return &model.LoginResponse{
+		Token:    token,
+		Customer: customerInterface,
+	}, nil
+}
+
+// Mutation returns MutationResolver implementation.
+func (r *Resolver) Mutation() MutationResolver { return &mutationResolver{r} }
+
+// Query returns QueryResolver implementation.
+func (r *Resolver) Query() QueryResolver { return &queryResolver{r} }
+
+type mutationResolver struct{ *Resolver }
+type queryResolver struct{ *Resolver }
+
 // Helper functions to convert db.Customer to appropriate GraphQL types
 func convertToCustomerInterface(customer *db.Customer) model.CustomerInterface {
 	switch customer.Type {
@@ -475,12 +552,3 @@ func getPremiumBenefits(tier string) []string {
 		return []string{"Basic Support", "Standard Features"}
 	}
 }
-
-// Mutation returns MutationResolver implementation.
-func (r *Resolver) Mutation() MutationResolver { return &mutationResolver{r} }
-
-// Query returns QueryResolver implementation.
-func (r *Resolver) Query() QueryResolver { return &queryResolver{r} }
-
-type mutationResolver struct{ *Resolver }
-type queryResolver struct{ *Resolver }

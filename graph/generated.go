@@ -72,6 +72,11 @@ type ComplexityRoot struct {
 		UpdatedAt    func(childComplexity int) int
 	}
 
+	LoginResponse struct {
+		Customer func(childComplexity int) int
+		Token    func(childComplexity int) int
+	}
+
 	Mutation struct {
 		CreateBusinessCustomer          func(childComplexity int, input model.CreateBusinessCustomerInput) int
 		CreateCustomerWithErrorHandling func(childComplexity int, input model.CreateIndividualCustomerInput) int
@@ -109,6 +114,7 @@ type ComplexityRoot struct {
 		CustomersByStatus            func(childComplexity int, status model.CustomerStatus, page *int32, offset *int32) int
 		CustomersByType              func(childComplexity int, typeArg model.CustomerType, page *int32, offset *int32) int
 		GetCustomerWithErrorHandling func(childComplexity int, id string) int
+		Login                        func(childComplexity int, input model.LoginInput) int
 		PremiumCustomersByTier       func(childComplexity int, tier string, page *int32, offset *int32) int
 		SearchCustomers              func(childComplexity int, query string) int
 	}
@@ -130,6 +136,7 @@ type QueryResolver interface {
 	GetCustomerWithErrorHandling(ctx context.Context, id string) (model.CustomerOperationResult, error)
 	CustomersByStatus(ctx context.Context, status model.CustomerStatus, page *int32, offset *int32) ([]model.CustomerInterface, error)
 	PremiumCustomersByTier(ctx context.Context, tier string, page *int32, offset *int32) ([]*model.PremiumCustomer, error)
+	Login(ctx context.Context, input model.LoginInput) (*model.LoginResponse, error)
 }
 
 type executableSchema struct {
@@ -255,6 +262,19 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.IndividualCustomer.UpdatedAt(childComplexity), true
+
+	case "LoginResponse.customer":
+		if e.complexity.LoginResponse.Customer == nil {
+			break
+		}
+
+		return e.complexity.LoginResponse.Customer(childComplexity), true
+	case "LoginResponse.token":
+		if e.complexity.LoginResponse.Token == nil {
+			break
+		}
+
+		return e.complexity.LoginResponse.Token(childComplexity), true
 
 	case "Mutation.createBusinessCustomer":
 		if e.complexity.Mutation.CreateBusinessCustomer == nil {
@@ -459,6 +479,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.Query.GetCustomerWithErrorHandling(childComplexity, args["id"].(string)), true
+	case "Query.login":
+		if e.complexity.Query.Login == nil {
+			break
+		}
+
+		args, err := ec.field_Query_login_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.Login(childComplexity, args["input"].(model.LoginInput)), true
 	case "Query.premiumCustomersByTier":
 		if e.complexity.Query.PremiumCustomersByTier == nil {
 			break
@@ -494,6 +525,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputCreateBusinessCustomerInput,
 		ec.unmarshalInputCreateIndividualCustomerInput,
 		ec.unmarshalInputCreatePremiumCustomerInput,
+		ec.unmarshalInputLoginInput,
 		ec.unmarshalInputPersonalInfoInput,
 		ec.unmarshalInputUpdateCustomerInput,
 	)
@@ -685,12 +717,14 @@ enum CustomerStatus {
 input CreateIndividualCustomerInput {
     name: String!
     email: String!
+    password: String!
     personalInfo: PersonalInfoInput
 }
 
 input CreateBusinessCustomerInput {
     name: String!
     email: String!
+    password: String!
     companyName: String!
     businessInfo: BusinessInfoInput
 }
@@ -698,6 +732,7 @@ input CreateBusinessCustomerInput {
 input CreatePremiumCustomerInput {
     name: String!
     email: String!
+    password: String!
     premiumTier: String!
 }
 
@@ -723,6 +758,18 @@ input UpdateCustomerInput {
     businessInfo: BusinessInfoInput
 }
 
+# Login input
+input LoginInput {
+    email: String!
+    password: String!
+}
+
+# Login response
+type LoginResponse {
+    token: String!
+    customer: CustomerInterface!
+}
+
 type Query {
     # Interface-based queries
     customers(page: Int = 2, offset: Int = 0): [CustomerInterface!]!
@@ -736,6 +783,9 @@ type Query {
     # Advanced queries
     customersByStatus(status: CustomerStatus!, page: Int = 2, offset: Int = 0): [CustomerInterface!]!
     premiumCustomersByTier(tier: String!, page: Int = 2, offset: Int = 0): [PremiumCustomer!]!
+    
+    # Authentication
+    login(input: LoginInput!): LoginResponse!
 }
 
 type Mutation {
@@ -917,6 +967,17 @@ func (ec *executionContext) field_Query_getCustomerWithErrorHandling_args(ctx co
 		return nil, err
 	}
 	args["id"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_login_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input", ec.unmarshalNLoginInput2goᚑgraphqlᚑpocᚋgraphᚋmodelᚐLoginInput)
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
 	return args, nil
 }
 
@@ -1510,6 +1571,64 @@ func (ec *executionContext) fieldContext_IndividualCustomer_personalInfo(_ conte
 				return ec.fieldContext_PersonalInfo_dateOfBirth(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type PersonalInfo", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _LoginResponse_token(ctx context.Context, field graphql.CollectedField, obj *model.LoginResponse) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_LoginResponse_token,
+		func(ctx context.Context) (any, error) {
+			return obj.Token, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_LoginResponse_token(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "LoginResponse",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _LoginResponse_customer(ctx context.Context, field graphql.CollectedField, obj *model.LoginResponse) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_LoginResponse_customer,
+		func(ctx context.Context) (any, error) {
+			return obj.Customer, nil
+		},
+		nil,
+		ec.marshalNCustomerInterface2goᚑgraphqlᚑpocᚋgraphᚋmodelᚐCustomerInterface,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_LoginResponse_customer(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "LoginResponse",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("FieldContext.Child cannot be called on type INTERFACE")
 		},
 	}
 	return fc, nil
@@ -2481,6 +2600,53 @@ func (ec *executionContext) fieldContext_Query_premiumCustomersByTier(ctx contex
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Query_premiumCustomersByTier_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_login(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_login,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.resolvers.Query().Login(ctx, fc.Args["input"].(model.LoginInput))
+		},
+		nil,
+		ec.marshalNLoginResponse2ᚖgoᚑgraphqlᚑpocᚋgraphᚋmodelᚐLoginResponse,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_login(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "token":
+				return ec.fieldContext_LoginResponse_token(ctx, field)
+			case "customer":
+				return ec.fieldContext_LoginResponse_customer(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type LoginResponse", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_login_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -4096,7 +4262,7 @@ func (ec *executionContext) unmarshalInputCreateBusinessCustomerInput(ctx contex
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"name", "email", "companyName", "businessInfo"}
+	fieldsInOrder := [...]string{"name", "email", "password", "companyName", "businessInfo"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -4117,6 +4283,13 @@ func (ec *executionContext) unmarshalInputCreateBusinessCustomerInput(ctx contex
 				return it, err
 			}
 			it.Email = data
+		case "password":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("password"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Password = data
 		case "companyName":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("companyName"))
 			data, err := ec.unmarshalNString2string(ctx, v)
@@ -4144,7 +4317,7 @@ func (ec *executionContext) unmarshalInputCreateIndividualCustomerInput(ctx cont
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"name", "email", "personalInfo"}
+	fieldsInOrder := [...]string{"name", "email", "password", "personalInfo"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -4165,6 +4338,13 @@ func (ec *executionContext) unmarshalInputCreateIndividualCustomerInput(ctx cont
 				return it, err
 			}
 			it.Email = data
+		case "password":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("password"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Password = data
 		case "personalInfo":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("personalInfo"))
 			data, err := ec.unmarshalOPersonalInfoInput2ᚖgoᚑgraphqlᚑpocᚋgraphᚋmodelᚐPersonalInfoInput(ctx, v)
@@ -4185,7 +4365,7 @@ func (ec *executionContext) unmarshalInputCreatePremiumCustomerInput(ctx context
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"name", "email", "premiumTier"}
+	fieldsInOrder := [...]string{"name", "email", "password", "premiumTier"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -4206,6 +4386,13 @@ func (ec *executionContext) unmarshalInputCreatePremiumCustomerInput(ctx context
 				return it, err
 			}
 			it.Email = data
+		case "password":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("password"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Password = data
 		case "premiumTier":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("premiumTier"))
 			data, err := ec.unmarshalNString2string(ctx, v)
@@ -4213,6 +4400,40 @@ func (ec *executionContext) unmarshalInputCreatePremiumCustomerInput(ctx context
 				return it, err
 			}
 			it.PremiumTier = data
+		}
+	}
+
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputLoginInput(ctx context.Context, obj any) (model.LoginInput, error) {
+	var it model.LoginInput
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"email", "password"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "email":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("email"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Email = data
+		case "password":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("password"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Password = data
 		}
 	}
 
@@ -4573,6 +4794,50 @@ func (ec *executionContext) _IndividualCustomer(ctx context.Context, sel ast.Sel
 			}
 		case "personalInfo":
 			out.Values[i] = ec._IndividualCustomer_personalInfo(ctx, field, obj)
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var loginResponseImplementors = []string{"LoginResponse"}
+
+func (ec *executionContext) _LoginResponse(ctx context.Context, sel ast.SelectionSet, obj *model.LoginResponse) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, loginResponseImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("LoginResponse")
+		case "token":
+			out.Values[i] = ec._LoginResponse_token(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "customer":
+			out.Values[i] = ec._LoginResponse_customer(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -4993,6 +5258,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_premiumCustomersByTier(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "login":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_login(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
@@ -5582,6 +5869,25 @@ func (ec *executionContext) marshalNIndividualCustomer2ᚖgoᚑgraphqlᚑpocᚋg
 		return graphql.Null
 	}
 	return ec._IndividualCustomer(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNLoginInput2goᚑgraphqlᚑpocᚋgraphᚋmodelᚐLoginInput(ctx context.Context, v any) (model.LoginInput, error) {
+	res, err := ec.unmarshalInputLoginInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNLoginResponse2goᚑgraphqlᚑpocᚋgraphᚋmodelᚐLoginResponse(ctx context.Context, sel ast.SelectionSet, v model.LoginResponse) graphql.Marshaler {
+	return ec._LoginResponse(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNLoginResponse2ᚖgoᚑgraphqlᚑpocᚋgraphᚋmodelᚐLoginResponse(ctx context.Context, sel ast.SelectionSet, v *model.LoginResponse) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._LoginResponse(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNPremiumCustomer2goᚑgraphqlᚑpocᚋgraphᚋmodelᚐPremiumCustomer(ctx context.Context, sel ast.SelectionSet, v model.PremiumCustomer) graphql.Marshaler {
